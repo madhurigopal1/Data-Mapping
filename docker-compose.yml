@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  data-mapping:
+    build: .
+    container_name: data-mapping
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./output:/app/output
+      - ./logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+    networks:
+      - data-mapping-network
+
+  # Optional: Add a monitoring/dashboard service
+  # postgres:
+  #   image: postgres:14-alpine
+  #   container_name: data-mapping-db
+  #   environment:
+  #     POSTGRES_DB: data_mapping
+  #     POSTGRES_USER: admin
+  #     POSTGRES_PASSWORD: changeme
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   networks:
+  #     - data-mapping-network
+
+networks:
+  data-mapping-network:
+    driver: bridge
+
+# volumes:
+#   postgres_data:
