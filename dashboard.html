@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FlowCore Dashboard — {{ tier_cfg.name }} Tier</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --ink:      #0C0F1A;
+      --bg:       #F7F8FC;
+      --white:    #FFFFFF;
+      --standard: #3B82F6;
+      --premium:  #8B5CF6;
+      --enhanced: #10B981;
+      --accent:   #F59E0B;
+      --danger:   #EF4444;
+      --muted:    #6B7280;
+      --border:   #E5E7EB;
+      --sidebar:  #0F1223;
+      --mono: 'JetBrains Mono', monospace;
+      --display: 'Syne', sans-serif;
+      --body: 'Inter', sans-serif;
+      --tier-color: {{ tier_cfg.color }};
+    }
+    body {
+      font-family: var(--body);
+      background: var(--bg);
+      color: var(--ink);
+      display: flex; min-height: 100vh;
+    }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: 240px; flex-shrink: 0;
+      background: var(--sidebar);
+      padding: 24px 16px;
+      display: flex; flex-direction: column;
+      position: sticky; top: 0; height: 100vh;
+      overflow-y: auto;
+    }
+    .sidebar-logo {
+      font-family: var(--display); font-weight: 800;
+      font-size: 1.2rem; color: #fff;
+      padding: 0 8px 24px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      margin-bottom: 20px;
+    }
+    .sidebar-logo span { color: var(--tier-color); }
+    .tier-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: var(--tier-color);
+      padding: 4px 10px; border-radius: 20px;
+      font-size: 0.72rem; font-weight: 700;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      margin-bottom: 24px;
+    }
+    .nav-section {
+      font-size: 0.65rem; font-weight: 700;
+      color: #4B5563; letter-spacing: 0.1em;
+      text-transform: uppercase; padding: 0 8px;
+      margin-bottom: 8px;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 12px; border-radius: 10px;
+      cursor: pointer; color: #94A3B8;
+      font-size: 0.88rem; font-weight: 500;
+      text-decoration: none;
+      transition: all 0.15s; margin-bottom: 2px;
+    }
+    .nav-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
+    .nav-item.active {
+      background: rgba(255,255,255,0.1);
+      color: #fff; font-weight: 600;
+    }
+    .nav-icon { font-size: 1rem; width: 20px; text-align: center; }
+    .sidebar-bottom {
+      margin-top: auto; padding-top: 20px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .plan-switch {
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .plan-switch-label {
+      font-size: 0.7rem; color: #4B5563; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .plan-btns { display: flex; gap: 4px; }
+    .plan-btn {
+      flex: 1; padding: 6px 4px;
+      border-radius: 8px; border: none; cursor: pointer;
+      font-size: 0.7rem; font-weight: 700;
+      text-decoration: none; text-align: center;
+      transition: all 0.15s;
+    }
+
+    /* ── MAIN ── */
+    .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+    /* ── TOP BAR ── */
+    .topbar {
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      padding: 0 28px; height: 60px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 50;
+    }
+    .topbar-title {
+      font-family: var(--display); font-weight: 700; font-size: 1rem;
+    }
+    .topbar-right { display: flex; align-items: center; gap: 14px; }
+    .run-status {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 0.78rem; color: var(--enhanced); font-weight: 600;
+    }
+    .status-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--enhanced);
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; } 50% { opacity: 0.4; }
+    }
+    .refresh-btn {
+      padding: 7px 14px;
+      border: 1.5px solid var(--border); border-radius: 8px;
+      background: transparent; font-size: 0.8rem;
+      font-weight: 600; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .refresh-btn:hover { border-color: var(--tier-color); color: var(--tier-color); }
+
+    /* ── CONTENT ── */
+    .content { padding: 24px 28px; flex: 1; }
+
+    /* ── KPI CARDS ── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px; margin-bottom: 24px;
+    }
+    .kpi-card {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: 14px; padding: 20px;
+      transition: all 0.2s; position: relative; overflow: hidden;
+    }
+    .kpi-card::after {
+      content: attr(data-icon);
+      position: absolute; right: 14px; top: 14px;
+      font-size: 1.5rem; opacity: 0.15;
+    }
+    .kpi-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.06); transform: translateY(-1px); }
+    .kpi-label {
+      font-size: 0.72rem; color: var(--muted);
+      font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.06em; margin-bottom: 8px;
+    }
+    .kpi-value {
+      font-family: var(--display); font-size: 1.8rem;
+      font-weight: 800; line-height: 1; margin-bottom: 6px;
+    }
+    .kpi-change {
+      font-size: 0.75rem; font-weight: 600;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .kpi-change.up { color: var(--enhanced); }
+    .kpi-change.down { color: var(--danger); }
+
+    /* ── PIPELINE INPUT ── */
+    .pipeline-panel {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: 16px; padding: 24px; margin-bottom: 24px;
+    }
+    .panel-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 20px;
+    }
+    .panel-title {
+      font-family: var(--display); font-weight: 700; font-size: 1rem;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .panel-badge {
+      font-size: 0.7rem; font-weight: 700;
+      padding: 3px 8px; border-radius: 20px;
+      background: rgba(var(--tier-color-rgb, 139,92,246), 0.1);
+      color: var(--tier-color);
+    }
+    .input-row {
+      display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 12px;
+      align-items: end;
+    }
+    .input-group label {
+      display: block; font-size: 0.72rem; font-weight: 700;
+      color: var(--muted); text-transform: uppercase;
+      letter-spacing: 0.06em; margin-bottom: 6px;
+    }
+    .input-group input {
+      width: 100%; padding: 10px 14px;
+      border: 1.5px solid var(--border); border-radius: 10px;
+      font-family: var(--mono); font-size: 1.05rem; font-weight: 600;
+      background: var(--bg); transition: border-color 0.2s;
+    }
+    .input-group input:focus { outline: none; border-color: var(--tier-color); }
+    .run-btn {
+      padding: 11px 24px;
+      background: var(--tier-color); color: #fff;
+      border: none; border-radius: 10px;
+      font-weight: 700; font-size: 0.95rem;
+      cursor: pointer; white-space: nowrap;
+      transition: all 0.2s;
+    }
+    .run-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+    .run-btn:active { transform: translateY(0); }
+
+    /* ── PIPELINE RESULTS + MATRIX ── */
+    .results-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 20px; margin-bottom: 24px;
+    }
+    .ops-panel, .matrix-panel {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: 16px; padding: 24px;
+    }
+    .op-item {
+      display: grid;
+      grid-template-columns: 36px 1fr auto auto;
+      align-items: center; gap: 10px;
+      padding: 11px 14px;
+      background: var(--bg); border-radius: 10px;
+      border: 1px solid var(--border);
+      margin-bottom: 8px;
+      opacity: 0; transform: translateX(-8px);
+      transition: all 0.3s;
+    }
+    .op-item.visible { opacity: 1; transform: translateX(0); }
+    .op-num {
+      width: 28px; height: 28px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: 0.7rem; font-weight: 700;
+      color: #fff; background: var(--tier-color);
+    }
+    .op-name { font-family: var(--mono); font-size: 0.82rem; font-weight: 600; }
+    .op-formula { font-size: 0.75rem; color: var(--muted); }
+    .op-val {
+      font-family: var(--mono); font-weight: 700;
+      font-size: 0.95rem; color: var(--tier-color);
+      text-align: right;
+    }
+    .op-error { color: var(--danger); }
+
+    /* Matrix */
+    .matrix-table {
+      width: 100%; border-collapse: separate; border-spacing: 4px;
+    }
+    .matrix-table th {
+      background: var(--ink); color: #fff;
+      padding: 8px 10px; border-radius: 8px;
+      font-family: var(--mono); font-size: 0.78rem;
+      font-weight: 700; text-align: center;
+    }
+    .matrix-table td {
+      background: var(--bg); border: 1px solid var(--border);
+      padding: 10px; border-radius: 8px;
+      text-align: center; vertical-align: middle;
+    }
+    .m-lbl { font-size: 0.68rem; color: var(--muted); display: block; margin-bottom: 3px; }
+    .m-num { font-family: var(--mono); font-weight: 700; color: var(--tier-color); font-size: 0.95rem; }
+    .m-trend { font-size: 0.7rem; }
+
+    /* ── CHART ── */
+    .chart-panel {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: 16px; padding: 24px; margin-bottom: 24px;
+    }
+    .chart-wrap { position: relative; height: 220px; }
+
+    /* ── DATA TABLE ── */
+    .table-panel {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: 16px; padding: 24px; overflow: hidden;
+    }
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table th {
+      background: var(--bg); padding: 10px 14px;
+      font-size: 0.72rem; font-weight: 700;
+      color: var(--muted); text-transform: uppercase;
+      letter-spacing: 0.06em; text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .data-table td {
+      padding: 12px 14px; font-size: 0.85rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: rgba(0,0,0,0.015); }
+    .badge-op {
+      display: inline-block; padding: 3px 8px; border-radius: 6px;
+      font-family: var(--mono); font-size: 0.72rem; font-weight: 700;
+    }
+    .locked-row { opacity: 0.35; position: relative; }
+    .locked-icon { font-size: 0.8rem; color: var(--muted); }
+
+    /* ── LOADING STATE ── */
+    .loading { opacity: 0.5; pointer-events: none; }
+    .spinner {
+      display: inline-block; width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff; border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 1100px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .results-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .input-row { grid-template-columns: 1fr 1fr 1fr; }
+      .run-btn { grid-column: span 3; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── SIDEBAR ── -->
+<aside class="sidebar">
+  <div class="sidebar-logo">Flow<span>Core</span></div>
+  <div class="tier-badge">
+    <span style="width:7px;height:7px;border-radius:50%;background:var(--tier-color);display:inline-block;"></span>
+    {{ tier_cfg.name }} Tier
+  </div>
+
+  <div class="nav-section">Main</div>
+  <a href="/dashboard?tier={{ tier }}" class="nav-item active">
+    <span class="nav-icon">📊</span> Dashboard
+  </a>
+  <a href="/" class="nav-item">
+    <span class="nav-icon">🏠</span> Home
+  </a>
+
+  <div class="nav-section" style="margin-top:16px;">Operations</div>
+  {% for op in tier_cfg.ops %}
+  <div class="nav-item">
+    <span class="nav-icon">⚡</span> {{ op | capitalize }}
+  </div>
+  {% endfor %}
+
+  <div class="sidebar-bottom">
+    <div class="plan-switch">
+      <div class="plan-switch-label">Switch Tier</div>
+      <div class="plan-btns">
+        <a href="/dashboard?tier=standard" class="plan-btn"
+           style="background:{% if tier=='standard' %}var(--standard){% else %}rgba(59,130,246,0.15){% endif %};
+                  color:{% if tier=='standard' %}#fff{% else %}var(--standard){% endif %}">S</a>
+        <a href="/dashboard?tier=premium" class="plan-btn"
+           style="background:{% if tier=='premium' %}var(--premium){% else %}rgba(139,92,246,0.15){% endif %};
+                  color:{% if tier=='premium' %}#fff{% else %}var(--premium){% endif %}">P</a>
+        <a href="/dashboard?tier=enhanced" class="plan-btn"
+           style="background:{% if tier=='enhanced' %}var(--enhanced){% else %}rgba(16,185,129,0.15){% endif %};
+                  color:{% if tier=='enhanced' %}#fff{% else %}var(--enhanced){% endif %}">E</a>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- ── MAIN ── -->
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title">Pipeline Dashboard</div>
+    <div class="topbar-right">
+      <div class="run-status"><span class="status-dot"></span> Live</div>
+      <button class="refresh-btn" onclick="refreshAll()">↻ Refresh</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- KPI CARDS -->
+    <div class="kpi-grid" id="kpiGrid">
+      <div class="kpi-card" data-icon="⚡">
+        <div class="kpi-label">Total Operations</div>
+        <div class="kpi-value">—</div>
+        <div class="kpi-change up">Loading…</div>
+      </div>
+      <div class="kpi-card" data-icon="🔄">
+        <div class="kpi-label">Active Pipelines</div>
+        <div class="kpi-value">—</div>
+        <div class="kpi-change up">Loading…</div>
+      </div>
+      <div class="kpi-card" data-icon="⏱">
+        <div class="kpi-label">Avg Latency</div>
+        <div class="kpi-value">—</div>
+        <div class="kpi-change down">Loading…</div>
+      </div>
+      <div class="kpi-card" data-icon="✅">
+        <div class="kpi-label">Success Rate</div>
+        <div class="kpi-value">—</div>
+        <div class="kpi-change up">Loading…</div>
+      </div>
+    </div>
+
+    <!-- PIPELINE INPUT -->
+    <div class="pipeline-panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          ⚡ Run Pipeline
+          <span class="panel-badge">{{ tier_cfg.ops | length }} ops available</span>
+        </div>
+      </div>
+      <div class="input-row">
+        <div class="input-group">
+          <label>Variable A</label>
+          <input type="number" id="valA" value="10" step="any"/>
+        </div>
+        <div class="input-group">
+          <label>Variable B</label>
+          <input type="number" id="valB" value="5" step="any"/>
+        </div>
+        <div class="input-group">
+          <label>Variable C</label>
+          <input type="number" id="valC" value="2" step="any"/>
+        </div>
+        <button class="run-btn" id="runBtn" onclick="runPipeline()">
+          ▶ Execute
+        </button>
+      </div>
+    </div>
+
+    <!-- RESULTS + MATRIX -->
+    <div class="results-grid">
+      <div class="ops-panel">
+        <div class="panel-header">
+          <div class="panel-title">📋 Operation Results</div>
+          <span id="execTime" style="font-size:0.75rem;color:var(--muted);font-family:var(--mono);">—</span>
+        </div>
+        <div id="opsResults">
+          <div style="color:var(--muted);font-size:0.88rem;text-align:center;padding:20px;">
+            Click "Execute" to run the pipeline
+          </div>
+        </div>
+      </div>
+
+      <div class="matrix-panel">
+        <div class="panel-header">
+          <div class="panel-title">🔢 Result Matrix</div>
+          <span style="font-size:0.72rem;color:var(--muted);">{{ tier_cfg.matrix_size }}×{{ tier_cfg.matrix_size }} max</span>
+        </div>
+        <div id="matrixResults">
+          <div style="color:var(--muted);font-size:0.88rem;text-align:center;padding:20px;">
+            Matrix generates after execution
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CHART -->
+    <div class="chart-panel">
+      <div class="panel-header">
+        <div class="panel-title">📈 Operation Trends ({{ tier_cfg.history_days }}-day window)</div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="trendChart"></canvas>
+      </div>
+    </div>
+
+    <!-- DATA TABLE -->
+    <div class="table-panel">
+      <div class="panel-header" style="margin-bottom:16px;">
+        <div class="panel-title">📑 Operation History</div>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Operation</th>
+            <th>A</th>
+            <th>B</th>
+            <th>C</th>
+            <th>Result</th>
+            <th>Latency</th>
+            <th>Tier</th>
+            <th>Time</th>
+          </tr>
+        </thead>
+        <tbody id="historyTable">
+          <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">Run a pipeline to see history</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div><!-- end content -->
+</div><!-- end main -->
+
+<script>
+const TIER = '{{ tier }}';
+const TIER_COLOR = '{{ tier_cfg.color }}';
+const history = [];
+let chartInstance = null;
+
+// ── Load KPIs ──────────────────────────────────────────────────────────────
+async function loadStats() {
+  const res = await fetch('/api/stats');
+  const stats = await res.json();
+  const grid = document.getElementById('kpiGrid');
+  const cards = grid.querySelectorAll('.kpi-card');
+  stats.forEach((s, i) => {
+    if (!cards[i]) return;
+    cards[i].dataset.icon = s.icon;
+    cards[i].querySelector('.kpi-value').textContent = s.value;
+    const ch = cards[i].querySelector('.kpi-change');
+    ch.textContent = s.change;
+    ch.className = 'kpi-change ' + (s.up ? 'up' : 'down');
+  });
+}
+
+// ── Load Chart ─────────────────────────────────────────────────────────────
+async function loadChart() {
+  const res = await fetch('/api/chart?tier=' + TIER);
+  const data = await res.json();
+
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  if (chartInstance) chartInstance.destroy();
+
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: data.labels,
+      datasets: [
+        {
+          label: 'A + B',
+          data: data.add_series,
+          borderColor: '#3B82F6',
+          backgroundColor: 'rgba(59,130,246,0.06)',
+          tension: 0.4, fill: true, pointRadius: 3,
+        },
+        {
+          label: 'A - C',
+          data: data.subtract_series,
+          borderColor: '#EF4444',
+          backgroundColor: 'rgba(239,68,68,0.04)',
+          tension: 0.4, fill: true, pointRadius: 3,
+        },
+        {
+          label: 'A × B',
+          data: data.multiply_series,
+          borderColor: TIER_COLOR,
+          backgroundColor: TIER_COLOR + '10',
+          tension: 0.4, fill: true, pointRadius: 3,
+          hidden: !['premium','enhanced'].includes(TIER),
+        },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { font: { size: 11 }, padding: 16 } },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+        y: { grid: { color: '#F3F4F6' }, ticks: { font: { size: 10 } } },
+      },
+    },
+  });
+}
+
+// ── Run Pipeline ───────────────────────────────────────────────────────────
+async function runPipeline() {
+  const btn = document.getElementById('runBtn');
+  btn.innerHTML = '<span class="spinner"></span> Running…';
+  btn.disabled = true;
+
+  const a = parseFloat(document.getElementById('valA').value) || 0;
+  const b = parseFloat(document.getElementById('valB').value) || 0;
+  const c = parseFloat(document.getElementById('valC').value) || 0;
+
+  try {
+    const res = await fetch('/api/pipeline/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ a, b, c, tier: TIER }),
+    });
+    const data = await res.json();
+    renderOpsResults(data);
+    renderMatrix(data.matrix);
+    addToHistory(a, b, c, data);
+    document.getElementById('execTime').textContent = data.execution_ms + 'ms';
+  } catch (err) {
+    console.error(err);
+  } finally {
+    btn.innerHTML = '▶ Execute';
+    btn.disabled = false;
+  }
+}
+
+function renderOpsResults(data) {
+  const container = document.getElementById('opsResults');
+  container.innerHTML = data.pipeline_steps.map((step, i) => `
+    <div class="op-item" style="transition-delay:${i * 60}ms">
+      <div class="op-num">${i + 1}</div>
+      <div>
+        <div class="op-name">${step.op}</div>
+        <div class="op-formula">${Object.entries(step.inputs).map(([k,v]) => k+'='+v).join(', ')}</div>
+      </div>
+      <div></div>
+      <div class="op-val ${step.result === null ? 'op-error' : ''}">
+        ${step.result !== null ? step.result : '⚠ ' + step.error}
+      </div>
+    </div>
+  `).join('');
+  // Trigger animation
+  setTimeout(() => {
+    container.querySelectorAll('.op-item').forEach(el => el.classList.add('visible'));
+  }, 30);
+}
+
+function renderMatrix(matrix) {
+  if (!matrix || !matrix.length) return;
+  const container = document.getElementById('matrixResults');
+  const rows = matrix.map(m => `
+    <tr>
+      <td>
+        <span class="m-lbl">${m.col1_label} → ${m.col2_label}</span>
+        <span class="m-num">${m.value}</span>
+      </td>
+      <td style="font-family:var(--mono);font-size:0.8rem;color:var(--muted);">Row ${m.row}</td>
+      <td class="m-trend">${m.trend === 'up' ? '▲' : '▼'} ${m.trend}</td>
+    </tr>
+  `).join('');
+
+  container.innerHTML = `
+    <table class="matrix-table">
+      <thead><tr><th>Variables</th><th>Index</th><th>Trend</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+function addToHistory(a, b, c, data) {
+  const now = new Date().toLocaleTimeString();
+  data.pipeline_steps.forEach(step => {
+    history.unshift({ op: step.op, a, b, c, result: step.result, latency: data.execution_ms, tier: data.tier, time: now });
+  });
+  renderHistoryTable();
+}
+
+function renderHistoryTable() {
+  const tbody = document.getElementById('historyTable');
+  const rows = history.slice(0, 20).map(h => `
+    <tr>
+      <td><span class="badge-op" style="background:${TIER_COLOR}20;color:${TIER_COLOR}">${h.op}</span></td>
+      <td style="font-family:var(--mono)">${h.a}</td>
+      <td style="font-family:var(--mono)">${h.b}</td>
+      <td style="font-family:var(--mono)">${h.c}</td>
+      <td style="font-family:var(--mono);font-weight:700">${h.result !== null ? h.result : '⚠ Error'}</td>
+      <td style="font-family:var(--mono)">${h.latency}ms</td>
+      <td><span class="badge-op" style="background:rgba(0,0,0,0.06);color:var(--muted)">${h.tier}</span></td>
+      <td style="color:var(--muted);font-size:0.8rem">${h.time}</td>
+    </tr>
+  `).join('');
+  tbody.innerHTML = rows || '<tr><td colspan="8" style="text-align:center;color:var(--muted)">No history yet</td></tr>';
+}
+
+function refreshAll() {
+  loadStats();
+  loadChart();
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+loadStats();
+loadChart();
+// Auto-run demo on load
+window.addEventListener('DOMContentLoaded', () => setTimeout(runPipeline, 400));
+</script>
+</body>
+</html>
