@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FlowCore — Manufacturing OEE Monitor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --ink:      #0C0F1A;
+      --bg:       #F7F8FC;
+      --white:    #FFFFFF;
+      --blue:     #3B82F6;
+      --purple:   #8B5CF6;
+      --green:    #10B981;
+      --amber:    #F59E0B;
+      --red:      #EF4444;
+      --muted:    #6B7280;
+      --border:   #E5E7EB;
+      --sidebar:  #0F1223;
+      --mono:     'JetBrains Mono', monospace;
+      --display:  'Syne', sans-serif;
+      --body:     'Inter', sans-serif;
+      --tier:     #8B5CF6;
+    }
+    body { font-family: var(--body); background: var(--bg); color: var(--ink); display: flex; min-height: 100vh; }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: 220px; flex-shrink: 0;
+      background: var(--sidebar);
+      padding: 20px 14px;
+      display: flex; flex-direction: column;
+      position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    }
+    .logo { font-family: var(--display); font-weight: 800; font-size: 1.2rem; color: #fff; margin-bottom: 6px; }
+    .logo span { color: var(--green); }
+    .tier-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1);
+      color: var(--purple); padding: 3px 10px; border-radius: 20px;
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em;
+      text-transform: uppercase; margin-bottom: 22px;
+    }
+    .tier-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--purple); }
+    .nav-sect { font-size: 0.62rem; font-weight: 700; color: #374151; letter-spacing: 0.1em; text-transform: uppercase; padding: 0 8px; margin: 16px 0 6px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px; border-radius: 8px;
+      color: #94A3B8; font-size: 0.84rem; font-weight: 500;
+      cursor: pointer; margin-bottom: 2px; transition: all 0.15s;
+      text-decoration: none;
+    }
+    .nav-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
+    .nav-item.active { background: rgba(255,255,255,0.1); color: #fff; font-weight: 600; }
+    .nav-icon { font-size: 0.95rem; width: 18px; text-align: center; }
+    .sidebar-footer { margin-top: auto; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.07); }
+    .back-link {
+      display: block; color: #94A3B8; font-size: 0.8rem;
+      text-decoration: none; padding: 6px 8px;
+      transition: color 0.15s;
+    }
+    .back-link:hover { color: #fff; }
+
+    /* ── MAIN ── */
+    .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+    /* ── TOPBAR ── */
+    .topbar {
+      background: var(--white); border-bottom: 1px solid var(--border);
+      padding: 0 24px; height: 58px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 50;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 12px; }
+    .topbar-title { font-family: var(--display); font-weight: 700; font-size: 0.95rem; }
+    .customer-badge {
+      background: rgba(16,185,129,0.1); color: var(--green);
+      border: 1px solid rgba(16,185,129,0.2);
+      padding: 3px 10px; border-radius: 20px;
+      font-size: 0.72rem; font-weight: 700;
+    }
+    .topbar-right { display: flex; align-items: center; gap: 12px; }
+    .live-badge {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 0.75rem; color: var(--green); font-weight: 600;
+    }
+    .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+    .btn-sm {
+      padding: 6px 14px; border-radius: 7px;
+      border: 1.5px solid var(--border); background: transparent;
+      font-size: 0.78rem; font-weight: 600; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-sm:hover { border-color: var(--purple); color: var(--purple); }
+
+    /* ── CONTENT ── */
+    .content { padding: 22px 24px; flex: 1; }
+
+    /* ── USE CASE BANNER ── */
+    .uc-banner {
+      background: linear-gradient(135deg, rgba(16,185,129,0.06), rgba(59,130,246,0.06));
+      border: 1px solid rgba(16,185,129,0.2);
+      border-radius: 12px; padding: 14px 18px;
+      margin-bottom: 18px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .uc-banner-text { font-size: 0.84rem; color: var(--muted); }
+    .uc-banner-text strong { color: var(--ink); font-weight: 600; }
+    .ops-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      font-size: 0.68rem; font-weight: 700; font-family: var(--mono);
+      padding: 3px 8px; border-radius: 6px;
+    }
+
+    /* ── KPI GRID ── */
+    .kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 18px; }
+    .kpi-card {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px;
+    }
+    .kpi-label { font-size: 0.68rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+    .kpi-value { font-family: var(--display); font-size: 1.5rem; font-weight: 800; line-height: 1; margin-bottom: 5px; }
+    .kpi-change { font-size: 0.72rem; font-weight: 600; }
+    .kpi-change.up { color: var(--green); }
+    .kpi-change.warn { color: var(--amber); }
+    .kpi-change.dn { color: var(--red); }
+
+    /* ── PANELS ── */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .panel {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: 14px; padding: 18px 20px;
+    }
+    .panel-title {
+      font-family: var(--display); font-weight: 700; font-size: 0.9rem;
+      margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .panel-badge {
+      font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 10px;
+    }
+
+    /* ── PIPELINE INPUT ── */
+    .input-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .inp-grp label { display: block; font-size: 0.68rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 5px; }
+    .inp-grp input {
+      width: 100%; padding: 8px 10px;
+      border: 1.5px solid var(--border); border-radius: 8px;
+      font-family: var(--mono); font-size: 0.95rem; font-weight: 600;
+      background: var(--bg); transition: border-color 0.15s;
+    }
+    .inp-grp input:focus { outline: none; border-color: var(--purple); }
+    .run-btn {
+      width: 100%; padding: 10px;
+      background: var(--ink); color: #fff;
+      border: none; border-radius: 9px;
+      font-weight: 700; font-size: 0.88rem;
+      cursor: pointer; margin-bottom: 14px;
+      transition: all 0.2s;
+    }
+    .run-btn:hover { background: var(--purple); }
+
+    /* ── OP ROWS ── */
+    .op-row {
+      display: grid; grid-template-columns: 76px 1fr auto;
+      align-items: center; gap: 10px;
+      padding: 9px 12px; border-radius: 9px;
+      background: var(--bg); border: 1px solid var(--border);
+      margin-bottom: 7px;
+      opacity: 0; transform: translateX(-6px);
+      transition: all 0.3s;
+    }
+    .op-row.show { opacity: 1; transform: translateX(0); }
+    .op-tag {
+      font-size: 0.7rem; font-weight: 700; font-family: var(--mono);
+      padding: 3px 7px; border-radius: 6px; text-align: center;
+    }
+    .op-desc { font-size: 0.78rem; color: var(--muted); }
+    .op-val { font-family: var(--mono); font-weight: 700; font-size: 0.88rem; text-align: right; }
+
+    /* ── PRODUCTION LINES ── */
+    .line-row {
+      display: grid; grid-template-columns: 60px 1fr 70px 80px;
+      align-items: center; gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .line-row:last-child { border-bottom: none; }
+    .line-name { font-weight: 600; font-size: 0.85rem; }
+    .line-bar-wrap { }
+    .line-units { font-family: var(--mono); font-size: 0.82rem; font-weight: 600; margin-bottom: 3px; }
+    .bar-bg { height: 5px; background: var(--bg); border-radius: 3px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+    .line-oee { font-family: var(--mono); font-size: 0.82rem; font-weight: 600; text-align: center; }
+    .status-pill { display: inline-block; padding: 3px 9px; border-radius: 10px; font-size: 0.7rem; font-weight: 700; }
+
+    /* ── MATRIX ── */
+    .matrix-wrap { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+    .mx-cell {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 8px; text-align: center;
+    }
+    .mx-cell.hd { background: var(--ink); color: #fff; font-size: 0.72rem; font-weight: 700; }
+    .mx-label { font-size: 0.65rem; color: var(--muted); display: block; margin-bottom: 3px; }
+    .mx-val { font-family: var(--mono); font-weight: 700; font-size: 0.9rem; }
+
+    /* ── CHART ── */
+    .chart-wrap { position: relative; height: 200px; }
+
+    /* ── ALERT PANEL ── */
+    .alert-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px 0; border-bottom: 1px solid var(--border);
+    }
+    .alert-item:last-child { border-bottom: none; }
+    .alert-icon { width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0; }
+    .alert-body { flex: 1; }
+    .alert-title { font-size: 0.82rem; font-weight: 600; margin-bottom: 2px; }
+    .alert-sub { font-size: 0.75rem; color: var(--muted); }
+    .alert-time { font-size: 0.7rem; color: var(--muted); white-space: nowrap; }
+
+    /* ── FOOTER ── */
+    .footer-bar {
+      background: var(--white); border-top: 1px solid var(--border);
+      padding: 10px 24px;
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 0.75rem; color: var(--muted);
+    }
+
+    @media (max-width: 1100px) {
+      .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+      .three-col { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .two-col { grid-template-columns: 1fr; }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="logo">Flow<span>Core</span></div>
+  <div class="tier-pill"><span class="tier-dot"></span> Premium Tier</div>
+
+  <div class="nav-sect">Use Case 1</div>
+  <a class="nav-item active" href="#">
+    <span class="nav-icon">🏭</span> OEE Monitor
+  </a>
+  <a class="nav-item" href="#">
+    <span class="nav-icon">📊</span> Line Analytics
+  </a>
+  <a class="nav-item" href="#">
+    <span class="nav-icon">⚠️</span> Alerts
+  </a>
+  <a class="nav-item" href="#">
+    <span class="nav-icon">🔧</span> Maintenance
+  </a>
+
+  <div class="nav-sect">Pipeline</div>
+  <a class="nav-item" href="#">
+    <span class="nav-icon">⚡</span> A + B (Merge)
+  </a>
+  <a class="nav-item" href="#">
+    <span class="nav-icon">📉</span> A − C (Deviation)
+  </a>
+  <a class="nav-item" href="#">
+    <span class="nav-icon">✖️</span> A × B (Scale)
+  </a>
+  <a class="nav-item" href="#">
+    <span class="nav-icon">🔢</span> B++ + C (Counter)
+  </a>
+  <a class="nav-item" href="#">
+    <span class="nav-icon">➗</span> B / C (Ratio)
+  </a>
+
+  <div class="sidebar-footer">
+    <a href="landing.html" class="back-link">← Back to Landing</a>
+    <a href="dashboard.html?tier=premium" class="back-link">→ Core Dashboard</a>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-title">Manufacturing OEE Monitor</div>
+      <span class="customer-badge">Customer 1 — Discrete Mfg</span>
+    </div>
+    <div class="topbar-right">
+      <div class="live-badge"><span class="live-dot"></span> Live feed</div>
+      <button class="btn-sm" onclick="refreshAll()">↻ Refresh</button>
+      <button class="btn-sm" onclick="exportReport()">⬇ Export</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- USE CASE BANNER -->
+    <div class="uc-banner">
+      <div class="uc-banner-text">
+        <strong>Use Case 1 · Manufacturing OEE</strong> — Pipeline operations map to production metrics:
+        A = Planned output, B = Actual line output, C = Defect count
+      </div>
+      <div class="ops-chips">
+        <span class="chip" style="background:rgba(59,130,246,0.1);color:#3B82F6">A+B Yield</span>
+        <span class="chip" style="background:rgba(239,68,68,0.1);color:#EF4444">A−C Deviation</span>
+        <span class="chip" style="background:rgba(139,92,246,0.1);color:#8B5CF6">A×B Capacity</span>
+        <span class="chip" style="background:rgba(245,158,11,0.1);color:#F59E0B">B++c Counter</span>
+        <span class="chip" style="background:rgba(16,185,129,0.1);color:#10B981">B/C Rate</span>
+      </div>
+    </div>
+
+    <!-- KPI CARDS -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">Overall OEE</div>
+        <div class="kpi-value" id="kpi_oee" style="color: #8B5CF6;">78.4%</div>
+        <div class="kpi-change warn">▲ +1.2% vs yesterday</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Total Yield (A+B)</div>
+        <div class="kpi-value" id="kpi_yield">2,759</div>
+        <div class="kpi-change up">units this shift</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Yield Deviation (A−C)</div>
+        <div class="kpi-value" id="kpi_delta" style="color:#10B981;">−23</div>
+        <div class="kpi-change up">below defect target</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Defect Rate (B/C)</div>
+        <div class="kpi-value" id="kpi_rate">1.8%</div>
+        <div class="kpi-change up">threshold: 2.0%</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Active Lines</div>
+        <div class="kpi-value" id="kpi_lines">3 / 4</div>
+        <div class="kpi-change dn">Line 3 stopped</div>
+      </div>
+    </div>
+
+    <!-- PIPELINE + LINE STATUS -->
+    <div class="two-col">
+
+      <!-- PIPELINE OPERATIONS PANEL -->
+      <div class="panel">
+        <div class="panel-title">
+          Pipeline Operations
+          <span class="panel-badge" style="background:rgba(139,92,246,0.1);color:#8B5CF6;">Premium · 5 ops</span>
+        </div>
+
+        <div class="input-grid">
+          <div class="inp-grp">
+            <label>A — Planned output</label>
+            <input type="number" id="inA" value="1870"/>
+          </div>
+          <div class="inp-grp">
+            <label>B — Line 1+2 actual</label>
+            <input type="number" id="inB" value="889"/>
+          </div>
+          <div class="inp-grp">
+            <label>C — Defect count</label>
+            <input type="number" id="inC" value="34"/>
+          </div>
+        </div>
+
+        <button class="run-btn" id="runBtn" onclick="runPipeline()">▶ Execute Pipeline</button>
+
+        <div id="opsPanel">
+          <div class="op-row show">
+            <span class="op-tag" style="background:rgba(59,130,246,0.1);color:#3B82F6;">A + B</span>
+            <span class="op-desc">Combined line output</span>
+            <span class="op-val" id="r_add" style="color:#3B82F6;">2,759</span>
+          </div>
+          <div class="op-row show" style="transition-delay:0.06s">
+            <span class="op-tag" style="background:rgba(239,68,68,0.1);color:#EF4444;">A − C</span>
+            <span class="op-desc">Yield deviation from defects</span>
+            <span class="op-val" id="r_sub" style="color:#10B981;">1,836</span>
+          </div>
+          <div class="op-row show" style="transition-delay:0.12s">
+            <span class="op-tag" style="background:rgba(139,92,246,0.1);color:#8B5CF6;">A × B</span>
+            <span class="op-desc">Capacity utilization index</span>
+            <span class="op-val" id="r_mul">1.66M</span>
+          </div>
+          <div class="op-row show" style="transition-delay:0.18s">
+            <span class="op-tag" style="background:rgba(245,158,11,0.1);color:#F59E0B;">B++ + C</span>
+            <span class="op-desc">Shift cumulative counter</span>
+            <span class="op-val" id="r_inc">924</span>
+          </div>
+          <div class="op-row show" style="transition-delay:0.24s">
+            <span class="op-tag" style="background:rgba(16,185,129,0.1);color:#10B981;">B / C</span>
+            <span class="op-desc">Output-to-defect ratio</span>
+            <span class="op-val" id="r_div" style="color:#10B981;">26.15</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- PRODUCTION LINE STATUS -->
+      <div class="panel">
+        <div class="panel-title">Production Lines</div>
+
+        <div class="line-row">
+          <span class="line-name">Line 1</span>
+          <div class="line-bar-wrap">
+            <div class="line-units">957 units</div>
+            <div class="bar-bg"><div class="bar-fill" style="width:85%;background:#3B82F6;"></div></div>
+          </div>
+          <span class="line-oee" style="color:#3B82F6;">85.2%</span>
+          <span class="status-pill" style="background:rgba(16,185,129,0.1);color:#10B981;">Running</span>
+        </div>
+        <div class="line-row">
+          <span class="line-name">Line 2</span>
+          <div class="line-bar-wrap">
+            <div class="line-units">890 units</div>
+            <div class="bar-bg"><div class="bar-fill" style="width:79%;background:#8B5CF6;"></div></div>
+          </div>
+          <span class="line-oee" style="color:#8B5CF6;">79.1%</span>
+          <span class="status-pill" style="background:rgba(245,158,11,0.1);color:#F59E0B;">Caution</span>
+        </div>
+        <div class="line-row">
+          <span class="line-name">Line 3</span>
+          <div class="line-bar-wrap">
+            <div class="line-units">0 units</div>
+            <div class="bar-bg"><div class="bar-fill" style="width:0%;background:#EF4444;"></div></div>
+          </div>
+          <span class="line-oee" style="color:#EF4444;">—</span>
+          <span class="status-pill" style="background:rgba(239,68,68,0.1);color:#EF4444;">Stopped</span>
+        </div>
+        <div class="line-row">
+          <span class="line-name">Line 4</span>
+          <div class="line-bar-wrap">
+            <div class="line-units">912 units</div>
+            <div class="bar-bg"><div class="bar-fill" style="width:81%;background:#10B981;"></div></div>
+          </div>
+          <span class="line-oee" style="color:#10B981;">81.4%</span>
+          <span class="status-pill" style="background:rgba(16,185,129,0.1);color:#10B981;">Running</span>
+        </div>
+
+        <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--border);">
+          <div class="panel-title" style="margin-bottom:10px;">Active Alerts</div>
+          <div class="alert-item">
+            <div class="alert-icon" style="background:rgba(239,68,68,0.1);">🔴</div>
+            <div class="alert-body">
+              <div class="alert-title">Line 3 — Unplanned stoppage</div>
+              <div class="alert-sub">Motor fault detected. Maintenance dispatched.</div>
+            </div>
+            <div class="alert-time">08:42</div>
+          </div>
+          <div class="alert-item">
+            <div class="alert-icon" style="background:rgba(245,158,11,0.1);">🟡</div>
+            <div class="alert-body">
+              <div class="alert-title">Line 2 — OEE below 80%</div>
+              <div class="alert-sub">Yield rate at 79.1%, threshold is 80%.</div>
+            </div>
+            <div class="alert-time">09:15</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RESULT MATRIX + CHART -->
+    <div class="two-col">
+      <!-- RESULT MATRIX -->
+      <div class="panel">
+        <div class="panel-title">Result Matrix — Line × Metric</div>
+        <div class="matrix-wrap" id="matrixPanel">
+          <div class="mx-cell hd"></div>
+          <div class="mx-cell hd">Combined</div>
+          <div class="mx-cell hd">Net Yield</div>
+          <div class="mx-cell hd">Rate B/C</div>
+
+          <div class="mx-cell hd">Line 1+2</div>
+          <div class="mx-cell"><span class="mx-label">A+B</span><span class="mx-val" id="mx_l12_ab">1,847</span></div>
+          <div class="mx-cell"><span class="mx-label">A−C</span><span class="mx-val" id="mx_l12_ac">1,836</span></div>
+          <div class="mx-cell"><span class="mx-label">B/C</span><span class="mx-val" id="mx_l12_bc" style="color:#10B981;">26.15</span></div>
+
+          <div class="mx-cell hd">Line 3+4</div>
+          <div class="mx-cell"><span class="mx-label">active</span><span class="mx-val">912</span></div>
+          <div class="mx-cell"><span class="mx-label">vs plan</span><span class="mx-val" style="color:#EF4444;">−958</span></div>
+          <div class="mx-cell"><span class="mx-label">line 3 down</span><span class="mx-val" style="color:#F59E0B;">N/A</span></div>
+
+          <div class="mx-cell hd">Shift Total</div>
+          <div class="mx-cell"><span class="mx-label">total</span><span class="mx-val" id="mx_tot_ab">2,759</span></div>
+          <div class="mx-cell"><span class="mx-label">net yield</span><span class="mx-val" id="mx_tot_ac">1,836</span></div>
+          <div class="mx-cell"><span class="mx-label">defect %</span><span class="mx-val" id="mx_tot_rate">1.8%</span></div>
+        </div>
+      </div>
+
+      <!-- TREND CHART -->
+      <div class="panel">
+        <div class="panel-title">7-Day OEE Trend</div>
+        <div class="chart-wrap">
+          <canvas id="oeeChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end content -->
+
+  <div class="footer-bar">
+    <span>FlowCore · Manufacturing OEE · Customer 1 · Premium Tier · 30-day window</span>
+    <span id="lastRefresh">Last updated: just now</span>
+  </div>
+</div><!-- end main -->
+
+<script>
+// ── Pipeline compute ────────────────────────────────────────────────────────
+function fmt(n) {
+  if (Math.abs(n) >= 1e6) return (n/1e6).toFixed(2) + 'M';
+  if (Math.abs(n) >= 1000) return n.toLocaleString(undefined, {maximumFractionDigits:0});
+  return n.toFixed(2);
+}
+
+function runPipeline() {
+  const a = parseFloat(document.getElementById('inA').value) || 0;
+  const b = parseFloat(document.getElementById('inB').value) || 0;
+  const c = parseFloat(document.getElementById('inC').value) || 0;
+  const btn = document.getElementById('runBtn');
+  btn.textContent = '⏳ Running…';
+
+  setTimeout(() => {
+    const add = a + b;
+    const sub = a - c;
+    const mul = a * b;
+    const inc = (b + 1) + c;
+    const div = c > 0 ? b / c : Infinity;
+    const rate = c / (add) * 100;
+    const oee = ((add - c) / add * 0.88 * 100).toFixed(1);
+
+    document.getElementById('r_add').textContent = fmt(add);
+    document.getElementById('r_sub').textContent = fmt(sub);
+    document.getElementById('r_sub').style.color = sub >= 0 ? '#10B981' : '#EF4444';
+    document.getElementById('r_mul').textContent = fmt(mul);
+    document.getElementById('r_inc').textContent = fmt(inc);
+    document.getElementById('r_div').textContent = isFinite(div) ? div.toFixed(2) : '∞';
+
+    // KPIs
+    document.getElementById('kpi_oee').textContent = oee + '%';
+    document.getElementById('kpi_yield').textContent = add.toLocaleString(undefined,{maximumFractionDigits:0});
+    document.getElementById('kpi_delta').textContent = (sub >= 0 ? '+' : '') + Math.round(sub);
+    document.getElementById('kpi_rate').textContent = rate.toFixed(1) + '%';
+
+    // Matrix
+    document.getElementById('mx_l12_ab').textContent = fmt(add / 2);
+    document.getElementById('mx_l12_ac').textContent = fmt(sub);
+    document.getElementById('mx_l12_bc').textContent = isFinite(div) ? div.toFixed(2) : '∞';
+    document.getElementById('mx_tot_ab').textContent = fmt(add);
+    document.getElementById('mx_tot_ac').textContent = fmt(sub);
+    document.getElementById('mx_tot_rate').textContent = rate.toFixed(1) + '%';
+
+    // Animate op rows
+    document.querySelectorAll('.op-row').forEach((r, i) => {
+      r.classList.remove('show');
+      setTimeout(() => r.classList.add('show'), i * 60 + 30);
+    });
+
+    btn.textContent = '▶ Execute Pipeline';
+    document.getElementById('lastRefresh').textContent = 'Last updated: just now';
+  }, 500);
+}
+
+// ── Chart ───────────────────────────────────────────────────────────────────
+function initChart() {
+  const labels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const ctx = document.getElementById('oeeChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'OEE %',
+          data: [74.1, 76.3, 75.8, 79.2, 77.0, 80.1, 78.4],
+          borderColor: '#8B5CF6', backgroundColor: 'rgba(139,92,246,0.06)',
+          tension: 0.4, fill: true, pointRadius: 4,
+        },
+        {
+          label: 'Target',
+          data: [80,80,80,80,80,80,80],
+          borderColor: '#10B981', borderDash: [5,4],
+          tension: 0, fill: false, pointRadius: 0,
+        },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { font: { size: 11 }, padding: 14 } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+        y: { min: 60, max: 100, grid: { color: '#F3F4F6' }, ticks: { font: { size: 10 }, callback: v => v + '%' } },
+      },
+    },
+  });
+}
+
+function refreshAll() { runPipeline(); }
+function exportReport() { alert('Report export coming in v3 — PDF + Excel formats planned.'); }
+
+initChart();
+</script>
+</body>
+</html>
