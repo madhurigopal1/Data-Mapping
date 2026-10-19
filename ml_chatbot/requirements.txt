@@ -1,0 +1,6 @@
+# Requirements for ML chatbot demo
+fastapi
+uvicorn
+requests
+python-dotenv
+langchain

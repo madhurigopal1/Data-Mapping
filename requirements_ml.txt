@@ -1,0 +1,7 @@
+# requirements additions for dashboard and ml examples
+fastapi
+uvicorn
+scikit-learn
+xgboost
+lightgbm
+python-multipart
